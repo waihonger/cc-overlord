@@ -5,6 +5,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private var labelItem: NSStatusItem!
     private var signalWatcher: SignalWatcher!
     private var mostRecentSignal: Signal?
+    private var blinkTimer: Timer?
+    private var blinkVisible = true
+    private var hasSignals = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Label item (right side, click to jump to most recent)
@@ -36,11 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         mostRecentSignal = signals.sorted(by: { $0.timestamp > $1.timestamp }).first
 
         // Menu item: "N 🔔" or just 🔔
+        hasSignals = !signals.isEmpty
         if let button = menuItem.button {
             if signals.isEmpty {
                 button.title = ""
+                stopBlinking()
             } else {
                 button.title = "\(signals.count) "
+                startBlinking()
             }
         }
 
@@ -99,6 +105,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         guard let signal = sender.representedObject as? Signal else { return }
         signal.openInVSCode()
         signalWatcher.clearSignal(signal)
+    }
+
+    private func startBlinking() {
+        guard blinkTimer == nil else { return }
+        blinkVisible = true
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.blinkVisible.toggle()
+                if let button = self.menuItem.button {
+                    let bellName = self.blinkVisible ? "bell.fill" : "bell"
+                    button.image = NSImage(systemSymbolName: bellName, accessibilityDescription: "CC Overlord")
+                    button.image?.size = NSSize(width: 14, height: 14)
+                }
+            }
+        }
+    }
+
+    @MainActor private func stopBlinking() {
+        blinkTimer?.invalidate()
+        blinkTimer = nil
+        blinkVisible = true
+        if let button = menuItem.button {
+            button.image = NSImage(systemSymbolName: "bell", accessibilityDescription: "CC Overlord")
+            button.image?.size = NSSize(width: 14, height: 14)
+        }
     }
 
     private func truncate(_ s: String, to maxLen: Int) -> String {
