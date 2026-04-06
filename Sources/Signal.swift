@@ -17,8 +17,11 @@ final class Signal: NSObject, @unchecked Sendable {
 
     var terminalName: String {
         // Try to read names.json from the socket directory
-        let socketDir = (signalPath as NSString).deletingLastPathComponent
-            .replacingOccurrences(of: "/signals", with: "")
+        // deletingLastPathComponent twice: filename → signals dir → socket dir (#6)
+        let socketDir = URL(fileURLWithPath: signalPath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .path
         let namesPath = (socketDir as NSString).appendingPathComponent("names.json")
 
         if let data = try? Data(contentsOf: URL(fileURLWithPath: namesPath)),

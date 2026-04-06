@@ -3,11 +3,10 @@ import Foundation
 final class SignalWatcher: @unchecked Sendable {
     private let baseDir: String
     private let onChange: ([Signal]) -> Void
-    private var sources: [DispatchSourceFileSystemObject] = []
+    private var sourcesByPath: [String: DispatchSourceFileSystemObject] = [:]
     private let staleThreshold: TimeInterval = 15 * 60 // 15 minutes
     private let queue = DispatchQueue(label: "cc-overlord.watcher")
     private var timer: DispatchSourceTimer?
-    private var watchedDirs = Set<String>()
 
     init(onChange: @escaping ([Signal]) -> Void) {
         let tmpdir = ProcessInfo.processInfo.environment["TMPDIR"] ?? NSTemporaryDirectory()
@@ -16,24 +15,25 @@ final class SignalWatcher: @unchecked Sendable {
     }
 
     func start() {
-        // Scan immediately
-        scan()
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.scan()
+            self.watchDirectory(self.baseDir)
+            self.watchAllSignalDirs()
 
-        // Watch the base directory for new project directories
-        watchDirectory(baseDir)
-
-        // Watch all existing signal directories
-        watchAllSignalDirs()
-
-        // Periodic scan to catch missed events, clean stale signals,
-        // and watch any new signal directories
-        timer = DispatchSource.makeTimerSource(queue: queue)
-        timer?.schedule(deadline: .now() + 5, repeating: 5)
-        timer?.setEventHandler { [weak self] in
-            self?.watchAllSignalDirs()
-            self?.scan()
+            self.timer = DispatchSource.makeTimerSource(queue: self.queue)
+            self.timer?.schedule(deadline: .now() + 5, repeating: 5)
+            self.timer?.setEventHandler { [weak self] in
+                guard let self else { return }
+                // Retry base dir watch if it failed at launch (#9)
+                if self.sourcesByPath[self.baseDir] == nil {
+                    self.watchDirectory(self.baseDir)
+                }
+                self.watchAllSignalDirs()
+                self.scan()
+            }
+            self.timer?.resume()
         }
-        timer?.resume()
     }
 
     private func watchAllSignalDirs() {
@@ -42,7 +42,7 @@ final class SignalWatcher: @unchecked Sendable {
             let sigDir = (baseDir as NSString)
                 .appendingPathComponent(project)
                 .appending("/signals")
-            if !watchedDirs.contains(sigDir) {
+            if sourcesByPath[sigDir] == nil {
                 watchDirectory(sigDir)
             }
         }
@@ -64,8 +64,10 @@ final class SignalWatcher: @unchecked Sendable {
             close(fd)
         }
         source.resume()
-        sources.append(source)
-        watchedDirs.insert(path)
+
+        // Cancel any existing watcher for this path (#7)
+        sourcesByPath[path]?.cancel()
+        sourcesByPath[path] = source
     }
 
     func scan() {
@@ -84,10 +86,7 @@ final class SignalWatcher: @unchecked Sendable {
 
             guard let files = try? fm.contentsOfDirectory(atPath: signalDir) else { continue }
 
-            // Derive the project name — strip the hash suffix
             let project = deriveProjectName(from: projectDir)
-
-            // Resolve the actual workspace path from the project dir name
             let workspacePath = resolveWorkspacePath(projectDir: projectDir)
 
             for file in files where file.hasSuffix(".signal") {
@@ -98,7 +97,6 @@ final class SignalWatcher: @unchecked Sendable {
                 guard let attrs = try? fm.attributesOfItem(atPath: filePath),
                       let modified = attrs[.modificationDate] as? Date else { continue }
 
-                // Skip stale signals
                 if now.timeIntervalSince(modified) > staleThreshold {
                     try? fm.removeItem(atPath: filePath)
                     continue
@@ -118,8 +116,11 @@ final class SignalWatcher: @unchecked Sendable {
     }
 
     func clearSignal(_ signal: Signal) {
-        try? FileManager.default.removeItem(atPath: signal.signalPath)
-        scan()
+        // Route through serial queue for thread safety (#11)
+        queue.async { [weak self] in
+            try? FileManager.default.removeItem(atPath: signal.signalPath)
+            self?.scan()
+        }
     }
 
     private func deriveProjectName(from dirName: String) -> String {
@@ -132,8 +133,17 @@ final class SignalWatcher: @unchecked Sendable {
     }
 
     private func resolveWorkspacePath(projectDir: String) -> String {
-        // The socket dir name is "<folder-name>-<6-char-hash>"
-        // We can't perfectly reverse this, but we can search common locations
+        // Read workspace.json written by the VS Code extension (#1)
+        let metaPath = (baseDir as NSString)
+            .appendingPathComponent(projectDir)
+            .appending("/workspace.json")
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: metaPath)),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+           let wsPath = json["path"] {
+            return wsPath
+        }
+
+        // Fallback: guess from common locations
         let projectName = deriveProjectName(from: projectDir)
         let candidates = [
             NSHomeDirectory() + "/Code/" + projectName,
@@ -147,7 +157,12 @@ final class SignalWatcher: @unchecked Sendable {
                 return candidate
             }
         }
-        // Fallback: best guess
         return NSHomeDirectory() + "/Code/" + projectName
+    }
+
+    func stop() {
+        timer?.cancel()
+        sourcesByPath.values.forEach { $0.cancel() }
+        sourcesByPath.removeAll()
     }
 }
