@@ -1,23 +1,55 @@
 import Foundation
 
+enum SignalType: String {
+    case complete  // .signal
+    case permission // .permission
+    case error     // .error
+
+    var label: String {
+        switch self {
+        case .complete: return "done"
+        case .permission: return "needs approval"
+        case .error: return "error"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .complete: return "●"
+        case .permission: return "🔴"
+        case .error: return "❌"
+        }
+    }
+
+    var isUrgent: Bool {
+        self == .permission || self == .error
+    }
+
+    static let extensions: [(ext: String, type: SignalType)] = [
+        (".signal", .complete),
+        (".permission", .permission),
+        (".error", .error),
+    ]
+}
+
 final class Signal: NSObject, @unchecked Sendable {
     let project: String
     let projectPath: String
     let index: Int
     let timestamp: Date
     let signalPath: String
+    let type: SignalType
 
-    init(project: String, projectPath: String, index: Int, timestamp: Date, signalPath: String) {
+    init(project: String, projectPath: String, index: Int, timestamp: Date, signalPath: String, type: SignalType) {
         self.project = project
         self.projectPath = projectPath
         self.index = index
         self.timestamp = timestamp
         self.signalPath = signalPath
+        self.type = type
     }
 
     var terminalName: String {
-        // Try to read names.json from the socket directory
-        // deletingLastPathComponent twice: filename → signals dir → socket dir (#6)
         let socketDir = URL(fileURLWithPath: signalPath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -42,12 +74,10 @@ final class Signal: NSObject, @unchecked Sendable {
     }
 
     func openInVSCode() {
-        // Write goto file so the extension knows which terminal to focus
         let signalsDir = (signalPath as NSString).deletingLastPathComponent
         let gotoPath = (signalsDir as NSString).appendingPathComponent("goto")
         try? String(index).write(toFile: gotoPath, atomically: true, encoding: .utf8)
 
-        // Focus the VS Code window
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = ["-a", "Visual Studio Code", projectPath]

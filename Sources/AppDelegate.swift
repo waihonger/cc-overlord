@@ -36,7 +36,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     }
 
     @MainActor private func update(signals: [Signal]) {
-        mostRecentSignal = signals.sorted(by: { $0.timestamp > $1.timestamp }).first
+        // Urgent signals first (permission, error), then by timestamp
+        let sorted = signals.sorted { a, b in
+            if a.type.isUrgent != b.type.isUrgent { return a.type.isUrgent }
+            return a.timestamp > b.timestamp
+        }
+        mostRecentSignal = sorted.first
 
         // Menu item: "N 🔔" or just 🔔
         hasSignals = !signals.isEmpty
@@ -79,8 +84,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
                 )
                 menu.addItem(header)
 
-                for signal in projectSignals {
-                    let title = "  \(signal.terminalName)  —  \(signal.agoString)"
+                for signal in projectSignals.sorted(by: { a, b in
+                    if a.type.isUrgent != b.type.isUrgent { return a.type.isUrgent }
+                    return a.timestamp > b.timestamp
+                }) {
+                    let title = "  \(signal.type.icon) \(signal.terminalName)  —  \(signal.type.label), \(signal.agoString)"
                     let item = NSMenuItem(title: title, action: #selector(signalClicked(_:)), keyEquivalent: "")
                     item.target = self
                     item.representedObject = signal

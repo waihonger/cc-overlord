@@ -89,11 +89,23 @@ final class SignalWatcher: @unchecked Sendable {
             let project = deriveProjectName(from: projectDir)
             let workspacePath = resolveWorkspacePath(projectDir: projectDir)
 
-            for file in files where file.hasSuffix(".signal") {
-                let filePath = (signalDir as NSString).appendingPathComponent(file)
-                let indexStr = (file as NSString).deletingPathExtension
-                guard let index = Int(indexStr) else { continue }
+            for file in files {
+                var matchedType: SignalType?
+                var indexStr: String?
 
+                for (ext, type) in SignalType.extensions {
+                    if file.hasSuffix(ext) {
+                        matchedType = type
+                        indexStr = String(file.dropLast(ext.count))
+                        break
+                    }
+                }
+
+                guard let signalType = matchedType,
+                      let idxStr = indexStr,
+                      let index = Int(idxStr) else { continue }
+
+                let filePath = (signalDir as NSString).appendingPathComponent(file)
                 guard let attrs = try? fm.attributesOfItem(atPath: filePath),
                       let modified = attrs[.modificationDate] as? Date else { continue }
 
@@ -107,7 +119,8 @@ final class SignalWatcher: @unchecked Sendable {
                     projectPath: workspacePath,
                     index: index,
                     timestamp: modified,
-                    signalPath: filePath
+                    signalPath: filePath,
+                    type: signalType
                 ))
             }
         }
