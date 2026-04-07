@@ -21,8 +21,9 @@ When you click a terminal in the dropdown, CC Overlord focuses the right VS Code
 ## Requirements
 
 - macOS 13+
+- Xcode Command Line Tools (`xcode-select --install`)
 - [dtach-persist](https://github.com/waihonger/dtach-vscode-persist) v0.2.0+ (VS Code extension that creates the signal files)
-- Claude Code Stop hook configured (see below)
+- [Claude Code](https://claude.ai/code) with hooks configured (see below)
 
 ## Install
 
@@ -81,7 +82,7 @@ Three signal types:
 
 ## How it connects to dtach-persist
 
-CC Overlord watches `$TMPDIR/dtach-persist/*/signals/` for `.signal` files. These are created by the Claude Code Stop hook (which uses env vars `DTACH_SIGNAL_DIR` and `DTACH_SOCKET_INDEX` set by dtach-persist at terminal creation).
+CC Overlord watches `$TMPDIR/dtach-persist/*/signals/` for `.signal`, `.permission`, and `.error` files. These are created by Claude Code hooks (which use env vars `DTACH_SIGNAL_DIR` and `DTACH_SOCKET_INDEX` set by dtach-persist at terminal creation).
 
 When you click a terminal in the dropdown, CC Overlord:
 1. Writes a `goto` file with the terminal index
