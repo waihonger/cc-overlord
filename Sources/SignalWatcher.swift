@@ -4,7 +4,13 @@ final class SignalWatcher: @unchecked Sendable {
     private let baseDir: String
     private let onChange: ([Signal]) -> Void
     private var sourcesByPath: [String: DispatchSourceFileSystemObject] = [:]
-    private let staleThreshold: TimeInterval = 15 * 60 // 15 minutes
+    private let staleThreshold: TimeInterval = {
+        if let env = ProcessInfo.processInfo.environment["DTACH_SIGNAL_STALE_HOURS"],
+           let hours = Double(env) {
+            return hours * 3600
+        }
+        return 4 * 3600 // 4 hours default
+    }()
     private let queue = DispatchQueue(label: "cc-overlord.watcher")
     private var timer: DispatchSourceTimer?
 
