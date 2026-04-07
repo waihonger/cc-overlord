@@ -42,7 +42,7 @@ swift build -c release
 
 To run on login, add it to System Settings → General → Login Items.
 
-### 3. Configure Claude Code hook
+### 3. Configure Claude Code hooks
 
 Add to `~/.claude/settings.json`:
 
@@ -50,20 +50,22 @@ Add to `~/.claude/settings.json`:
 {
   "hooks": {
     "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "test -n \"$DTACH_SIGNAL_DIR\" && test -n \"$DTACH_SOCKET_INDEX\" && touch \"$DTACH_SIGNAL_DIR/$DTACH_SOCKET_INDEX.signal\" || true",
-            "timeout": 1000
-          }
-        ]
-      }
+      { "matcher": "", "hooks": [{ "type": "command", "command": "test -n \"$DTACH_SIGNAL_DIR\" && test -n \"$DTACH_SOCKET_INDEX\" && touch \"$DTACH_SIGNAL_DIR/$DTACH_SOCKET_INDEX.signal\" || true", "timeout": 1000 }] }
+    ],
+    "PermissionRequest": [
+      { "matcher": "", "hooks": [{ "type": "command", "command": "test -n \"$DTACH_SIGNAL_DIR\" && test -n \"$DTACH_SOCKET_INDEX\" && touch \"$DTACH_SIGNAL_DIR/$DTACH_SOCKET_INDEX.permission\" || true", "timeout": 1000 }] }
+    ],
+    "StopFailure": [
+      { "matcher": "", "hooks": [{ "type": "command", "command": "test -n \"$DTACH_SIGNAL_DIR\" && test -n \"$DTACH_SOCKET_INDEX\" && touch \"$DTACH_SIGNAL_DIR/$DTACH_SOCKET_INDEX.error\" || true", "timeout": 1000 }] }
     ]
   }
 }
 ```
+
+Three signal types:
+- **Stop** → `.signal` file → "done" (yellow)
+- **PermissionRequest** → `.permission` file → "needs approval" (red, urgent)
+- **StopFailure** → `.error` file → "error" (red, urgent)
 
 ## Menu bar UX
 
