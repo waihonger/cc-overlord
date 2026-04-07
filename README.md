@@ -76,7 +76,7 @@ Three signal types:
 | 1 signal | 🔔 project-name | Click name → jump to terminal |
 | 2+ signals | N 🔔 project-name | Click N/🔔 → dropdown, click name → jump to most recent |
 
-- Signals auto-clear after 15 minutes
+- Signals auto-clear after 4 hours (configurable via `DTACH_SIGNAL_STALE_HOURS` env var)
 - Signals clear when you switch to that terminal in VS Code
 - Dropdown groups terminals by project with time since completion
 
