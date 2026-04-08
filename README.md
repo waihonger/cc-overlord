@@ -22,7 +22,9 @@ When you click a terminal in the dropdown, CC Overlord focuses the right VS Code
 
 - macOS 13+
 - Xcode Command Line Tools (`xcode-select --install`)
-- [dtach-persist](https://github.com/waihonger/dtach-vscode-persist) v0.2.0+ (VS Code extension that creates the signal files)
+- A VS Code extension that creates signal files — either:
+  - [cc-persist](https://github.com/waihonger/cc-persist) (recommended — session persistence + signals)
+  - [dtach-persist](https://github.com/waihonger/dtach-vscode-persist) v0.2.0+ (original dtach-based approach)
 - [Claude Code](https://claude.ai/code) with hooks configured (see below)
 
 ## Install
@@ -80,14 +82,22 @@ Three signal types:
 - Signals clear when you switch to that terminal in VS Code
 - Dropdown groups terminals by project with time since completion
 
-## How it connects to dtach-persist
+## Global hotkey
 
-CC Overlord watches `$TMPDIR/dtach-persist/*/signals/` for `.signal`, `.permission`, and `.error` files. These are created by Claude Code hooks (which use env vars `DTACH_SIGNAL_DIR` and `DTACH_SOCKET_INDEX` set by dtach-persist at terminal creation).
+`Ctrl+Cmd+Option+M` — jump to the highest priority signal across all workspaces. Same as clicking the project label in the menu bar. Works from any app.
 
-When you click a terminal in the dropdown, CC Overlord:
+Priority order: permission requests > errors > completions, newest first.
+
+## How it connects to the VS Code extension
+
+CC Overlord watches `$TMPDIR/dtach-persist/*/signals/` for `.signal`, `.permission`, and `.error` files. These are created by Claude Code hooks (which use env vars `DTACH_SIGNAL_DIR` and `DTACH_SOCKET_INDEX` set by the VS Code extension at terminal creation).
+
+It reads `names.json` for terminal names and `workspace.json` for the project path from each workspace's signal base directory.
+
+When you click a terminal in the dropdown (or press the global hotkey), CC Overlord:
 1. Writes a `goto` file with the terminal index
 2. Opens the project in VS Code (`open -a "Visual Studio Code" /path/to/project`)
-3. dtach-persist reads the `goto` file and focuses the right terminal tab
+3. The VS Code extension reads the `goto` file and focuses the right terminal tab
 
 ## License
 

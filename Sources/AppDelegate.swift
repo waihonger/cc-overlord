@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 
 final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private var menuItem: NSStatusItem!
@@ -8,8 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private var blinkTimer: Timer?
     private var blinkVisible = true
     private var hasSignals = false
+    private var hotKeyRef: EventHotKeyRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        registerGlobalHotkey()
         // Label item (right side, click to jump to most recent)
         labelItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = labelItem.button {
@@ -144,6 +147,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private func truncate(_ s: String, to maxLen: Int) -> String {
         if s.count <= maxLen { return s }
         return String(s.prefix(maxLen - 1)) + "…"
+    }
+
+    private func registerGlobalHotkey() {
+        // Ctrl+Cmd+Option+M → jump to next signal
+        let hotKeyID = EventHotKeyID(signature: OSType(0x4343_4F4C), // "CCOL"
+                                      id: 1)
+        var ref: EventHotKeyRef?
+        // kVK_ANSI_M = 0x2E, modifiers: cmd+option+ctrl
+        let modifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey)
+        RegisterEventHotKey(UInt32(kVK_ANSI_M), modifiers, hotKeyID,
+                            GetApplicationEventTarget(), 0, &ref)
+        hotKeyRef = ref
+
+        var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                                       eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, userData -> OSStatus in
+            guard let userData else { return OSStatus(eventNotHandledErr) }
+            let appDelegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            DispatchQueue.main.async {
+                appDelegate.labelClicked()
+            }
+            return noErr
+        }, 1, &eventSpec, Unmanaged.passUnretained(self).toOpaque(), nil)
     }
 
     @MainActor @objc private func quit() {
